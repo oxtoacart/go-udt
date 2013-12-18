@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	FLAG_BIT = 1 << 31 // leading bit for distinguishing control from data packets
+	FLAG_BIT_32 = 1 << 31 // leading bit for distinguishing control from data packets (32 bit version)
+	FLAG_BIT_16 = 1 << 15 // leading bit for distinguishing control from data packets (16 bit version)
 
 	// Control packet types
 	HANDSHAKE            = 0x0
@@ -42,7 +43,6 @@ type DataPacket struct {
 // Control Packets
 
 type ControlPacketHeader struct {
-	msgType   uint32
 	info      uint32
 	ts        uint32
 	dstSockId uint32
@@ -129,9 +129,8 @@ func readDataPacket(b []byte, r *bytes.Reader, h uint32, maxPacketSize uint16) (
 }
 
 func (h *ControlPacketHeader) writeTo(w io.Writer) (err error) {
-	// Set the flag bit to indicate this is a control packet
-	msgType := h.msgType | FLAG_BIT
-	if err := writeBinary(w, msgType); err != nil {
+	// Write 16 bit reserved data
+	if err := writeBinary(w, uint16(0)); err != nil {
 		return err
 	}
 	if err := writeBinary(w, h.info); err != nil {
@@ -146,8 +145,8 @@ func (h *ControlPacketHeader) writeTo(w io.Writer) (err error) {
 	return
 }
 
-func readControlPacketHeader(h uint32, r io.Reader) (ch ControlPacketHeader, err error) {
-	ch = ControlPacketHeader{msgType: h}
+func readControlPacketHeader(r io.Reader) (ch ControlPacketHeader, err error) {
+	ch = ControlPacketHeader{}
 	if err = readBinary(r, &ch.info); err != nil {
 		return
 	}
@@ -161,6 +160,9 @@ func readControlPacketHeader(h uint32, r io.Reader) (ch ControlPacketHeader, err
 }
 
 func (p *HandshakePacket) writeTo(w io.Writer) (err error) {
+	if err := writeCtrlMsgType(w, HANDSHAKE); err != nil {
+		return err
+	}
 	if err := p.ch.writeTo(w); err != nil {
 		return err
 	}
@@ -231,18 +233,20 @@ func readPacketFromBytes(b []byte, maxPacketSize uint16) (p Packet, err error) {
 	if err = readBinary(r, &h); err != nil {
 		return
 	}
-	if h&FLAG_BIT == FLAG_BIT {
+	if h&FLAG_BIT_32 == FLAG_BIT_32 {
 		// this is a control packet
 		// Remove flag bit
-		h = h &^ FLAG_BIT
-		if ch, err := readControlPacketHeader(h, r); err != nil {
+		h = h &^ FLAG_BIT_32
+		// Message type is leading 16 bits
+		msgType := h >> 16
+		if ch, err := readControlPacketHeader(r); err != nil {
 			return nil, err
 		} else {
-			switch ch.msgType {
+			switch msgType {
 			case HANDSHAKE:
 				p, err = readHandshakePacket(b, r, ch, maxPacketSize)
 			default:
-				err = fmt.Errorf("Unkown control packet type: %X", ch.msgType)
+				err = fmt.Errorf("Unkown control packet type: %X", msgType)
 				return nil, err
 			}
 		}
@@ -268,4 +272,9 @@ func writeBinary(w io.Writer, n interface{}) (err error) {
 
 func readBinary(r io.Reader, n interface{}) (err error) {
 	return binary.Read(r, endianness, n)
+}
+
+func writeCtrlMsgType(w io.Writer, msgType uint16) (err error) {
+	// Sets the flag bit to indicate this is a control packet
+	return writeBinary(w, msgType|FLAG_BIT_16)
 }

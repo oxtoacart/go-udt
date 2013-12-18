@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestData(t *testing.T) {
+func TestDataPacket(t *testing.T) {
 	testPacket(
 		&DataPacket{
 			seq:       50,
@@ -17,11 +17,10 @@ func TestData(t *testing.T) {
 		}, t)
 }
 
-func TestHandshake(t *testing.T) {
+func TestHandshakePacket(t *testing.T) {
 	testPacket(
 		&HandshakePacket{
 			ch: ControlPacketHeader{
-				msgType:   HANDSHAKE,
 				ts:        100,
 				dstSockId: 59,
 			},
