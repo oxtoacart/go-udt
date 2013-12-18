@@ -10,3 +10,11 @@ implemented:
 
 */
 package udt
+
+import (
+	"io"
+)
+
+type Packet interface {
+	writeTo(io.Writer) (err error)
+}

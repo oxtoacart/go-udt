@@ -112,8 +112,8 @@ func (dp *DataPacket) writeTo(w io.Writer) (err error) {
 	return
 }
 
-func readDataPacket(b []byte, r *bytes.Reader, h uint32, maxPacketSize uint16) (p DataPacket, err error) {
-	p = DataPacket{
+func readDataPacket(b []byte, r *bytes.Reader, h uint32, maxPacketSize uint16) (p *DataPacket, err error) {
+	p = &DataPacket{
 		seq:  h,
 		data: make([]byte, maxPacketSize),
 	}
@@ -194,8 +194,8 @@ func (p *HandshakePacket) writeTo(w io.Writer) (err error) {
 	return
 }
 
-func readHandshakePacket(b []byte, r *bytes.Reader, ch ControlPacketHeader, maxPacketSize uint16) (p HandshakePacket, err error) {
-	p = HandshakePacket{ch: ch}
+func readHandshakePacket(b []byte, r *bytes.Reader, ch ControlPacketHeader, maxPacketSize uint16) (p *HandshakePacket, err error) {
+	p = &HandshakePacket{ch: ch}
 	if err = readBinary(r, &p.udtVer); err != nil {
 		return
 	}
@@ -224,7 +224,7 @@ func readHandshakePacket(b []byte, r *bytes.Reader, ch ControlPacketHeader, maxP
 	return
 }
 
-func readPacketFromBytes(b []byte, maxPacketSize uint16) (p interface{}, err error) {
+func readPacketFromBytes(b []byte, maxPacketSize uint16) (p Packet, err error) {
 	// Wrap the byte slice with a reader so that we can use binary.Read() for the metadata
 	r := bytes.NewReader(b)
 	var h uint32
@@ -253,7 +253,7 @@ func readPacketFromBytes(b []byte, maxPacketSize uint16) (p interface{}, err err
 	return
 }
 
-func readPacketFromConn(n net.PacketConn, maxPacketSize uint16) (packet interface{}, err error) {
+func readPacketFromConn(n net.PacketConn, maxPacketSize uint16) (packet Packet, err error) {
 	b := make([]byte, maxPacketSize)
 	if n, _, err := n.ReadFrom(b); err != nil {
 		return nil, err
