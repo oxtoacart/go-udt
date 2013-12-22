@@ -12,9 +12,12 @@ implemented:
 package udt
 
 import (
+	"bytes"
 	"io"
 )
 
 type Packet interface {
 	writeTo(io.Writer) (err error)
+
+	readFrom(b []byte, r *bytes.Reader) (err error)
 }
