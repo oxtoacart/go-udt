@@ -16,8 +16,12 @@ import (
 	"io"
 )
 
-type Packet interface {
+type packet interface {
 	writeTo(io.Writer) (err error)
 
 	readFrom(b []byte, r *bytes.Reader) (err error)
+
+	sendTime() (ts uint32)
+	
+	dstSocketId() (dstSocketId uint32) 
 }

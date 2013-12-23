@@ -16,7 +16,7 @@ func TestDataPacket(t *testing.T) {
 		}, t)
 }
 
-func testPacket(p Packet, t *testing.T) {
+func testPacket(p packet, t *testing.T) {
 	b := bytes.NewBuffer([]byte{})
 	if err := p.writeTo(b); err != nil {
 		t.Errorf("Unable to write packet: %s", err)

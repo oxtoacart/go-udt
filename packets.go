@@ -48,6 +48,22 @@ type controlPacket struct {
 	dstSockId uint32
 }
 
+func (p *dataPacket) sendTime() (ts uint32) {
+	return p.ts
+}
+
+func (p *controlPacket) sendTime() (ts uint32) {
+	return p.ts
+}
+
+func (p *dataPacket) dstSocketId() (dstSocketId uint32) {
+	return p.dstSockId
+}
+
+func (p *controlPacket) dstSocketId() (dstSocketId uint32) {
+	return p.dstSockId
+}
+
 func (dp *dataPacket) writeTo(w io.Writer) (err error) {
 	if err := writeBinary(w, dp.seq); err != nil {
 		return err
@@ -110,7 +126,7 @@ func (p *controlPacket) readHeaderFrom(r io.Reader) (addtlInfo uint32, err error
 	return
 }
 
-func readPacketFromBytes(b []byte, maxPacketSize uint16) (p Packet, err error) {
+func readPacketFromBytes(b []byte, maxPacketSize uint16) (p packet, err error) {
 	// Wrap the byte slice with a reader so that we can use binary.Read() for the metadata
 	r := bytes.NewReader(b)
 	var h uint32
@@ -155,7 +171,7 @@ func readPacketFromBytes(b []byte, maxPacketSize uint16) (p Packet, err error) {
 	return
 }
 
-func readPacketFromConn(n net.PacketConn, maxPacketSize uint16) (packet Packet, err error) {
+func readPacketFromConn(n net.PacketConn, maxPacketSize uint16) (packet packet, err error) {
 	b := make([]byte, maxPacketSize)
 	if n, _, err := n.ReadFrom(b); err != nil {
 		return nil, err
