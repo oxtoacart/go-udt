@@ -19,10 +19,10 @@ func (q *packetQueue) push(p packet) {
 }
 
 /*
-nextPacketSendTime returns the ts of the next packet with the lowest ts of
+nextSendTime returns the ts of the next packet with the lowest ts of
 queued packets, or math.MaxUint32 if no packets are queued.
 */
-func (q *packetQueue) nextPacketSendTime() (ts uint32) {
+func (q *packetQueue) nextSendTime() (ts uint32) {
 	p := q.peek()
 	if p != nil {
 		return p.sendTime()

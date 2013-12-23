@@ -46,7 +46,7 @@ A socketHeap is the internal implementation of a Heap used by udtSocketQueue.
 type socketHeap []*packetQueue
 
 func (h socketHeap) Len() int           { return len(h) }
-func (h socketHeap) Less(i, j int) bool { return h[i].nextPacketSendTime() < h[j].nextPacketSendTime() }
+func (h socketHeap) Less(i, j int) bool { return h[i].nextSendTime() < h[j].nextSendTime() }
 func (h socketHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
 func (h *socketHeap) Push(x interface{}) {
