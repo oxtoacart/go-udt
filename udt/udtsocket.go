@@ -93,8 +93,6 @@ func newClientSocket(ctrlOut chan packet, peerIp net.IP, sockId uint32) (s *udtS
 		dataOut:        newPacketQueue(),
 	}
 
-	s.initHandshake()
-
 	return
 }
 

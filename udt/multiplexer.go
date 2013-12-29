@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"sync"
+	"bytes"
+	"time"
 )
 
 /*
@@ -20,7 +22,7 @@ type multiplexer struct {
 	in              chan packet       // packets inbound from the PacketConn
 	out             chan packet       // packets outbound to the PacketConn
 	writeBufferPool *bpool.BufferPool // leaky buffer pool for writing to conn
-	readBufferPool  *bpool.BufferPool // leaky buffer pool for reading from conn
+	readBytePool    *bpool.BytePool   // leaky byte pool for reading from conn
 }
 
 func (m *multiplexer) Accept() (c *net.UDPConn, err error) {
@@ -63,11 +65,11 @@ func newMultiplexer(conn *net.UDPConn) (m *multiplexer) {
 		sockets:         make(map[uint32]*udtSocket),
 		socketsMutex:    new(sync.Mutex),
 		sendQ:           newUdtSocketQueue(),
-		ctrlOut:         make(chan packet, 100),     // todo: figure out how to size this
-		in:              make(chan packet, 100),     // todo: make this tunable
-		out:             make(chan packet, 100),     // todo: make this tunable
-		writeBufferPool: bpool.NewBufferPool(25600), // todo: make this tunable
-		readBufferPool:  bpool.NewBufferPool(25600), // todo: make this tunable
+		ctrlOut:         make(chan packet, 100),                    // todo: figure out how to size this
+		in:              make(chan packet, 100),                    // todo: make this tunable
+		out:             make(chan packet, 100),                    // todo: make this tunable
+		writeBufferPool: bpool.NewBufferPool(25600),                // todo: make this tunable
+		readBytePool:    bpool.NewBytePool(25600, max_packet_size), // todo: make this tunable
 	}
 
 	go m.coordinate()
@@ -89,6 +91,12 @@ func (m *multiplexer) newClientSocket() (s *udtSocket, err error) {
 			m.sockets[sid] = s
 		}
 	}
+
+	for {
+		s.initHandshake()
+		time.Sleep(200 * time.Millisecond)
+	}
+
 	return
 }
 
@@ -98,13 +106,14 @@ readBufferPool, or a new buffer.
 */
 func (m *multiplexer) read() {
 	for {
-		b := m.readBufferPool.Get()
-		defer m.readBufferPool.Put(b)
-		if _, err := b.ReadFrom(m.conn); err != nil {
-			// todo: handle error
+		b := m.readBytePool.Get()
+		defer m.readBytePool.Put(b)
+		if _, err := m.conn.Read(b); err != nil {
+			log.Printf("Unable to read into buffer: %s", err)
 		} else {
-			if p, err := readPacketFrom(b); err != nil {
-				// TODO: handle error
+			r := bytes.NewReader(b)
+			if p, err := readPacketFrom(r); err != nil {
+				log.Printf("Unable to read packet: %s", err)
 			} else {
 				m.in <- p
 			}

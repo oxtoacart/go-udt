@@ -12,9 +12,10 @@ func main() {
 		log.Fatalf("Unable to resolve address: %s", err)
 	} else {
 		go server(addr)
+		time.Sleep(200 * time.Millisecond)
 		go client(addr)
-		
-		time.Sleep(5 * time.Second)
+
+		time.Sleep(50 * time.Second)
 	}
 }
 
