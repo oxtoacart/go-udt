@@ -3,12 +3,11 @@ package udt
 // Structure of packets and functions for writing/reading them
 
 import (
-	"bytes"
 	"io"
 )
 
 type ackPacket struct {
-	controlPacket
+	h        header
 	ackSeqNo uint32 // ACK sequence number
 	pktSeqHi uint32 // The packet sequence number to which all the previous packets have been received (excluding)
 
@@ -20,8 +19,12 @@ type ackPacket struct {
 	estLinkCap  uint32 // Estimated link capacity (in number of packets per second)
 }
 
+func (p *ackPacket) sendTime() (ts uint32) {
+	return p.h.ts
+}
+
 func (p *ackPacket) writeTo(w io.Writer) (err error) {
-	if err := p.writeHeaderTo(w, ack, p.ackSeqNo); err != nil {
+	if err := p.h.writeTo(w, ack, p.ackSeqNo); err != nil {
 		return err
 	}
 	if err := writeBinary(w, p.pktSeqHi); err != nil {
@@ -45,8 +48,8 @@ func (p *ackPacket) writeTo(w io.Writer) (err error) {
 	return
 }
 
-func (p *ackPacket) readFrom(b []byte, r *bytes.Reader) (err error) {
-	if p.ackSeqNo, err = p.readHeaderFrom(r); err != nil {
+func (p *ackPacket) readFrom(r io.Reader) (err error) {
+	if p.ackSeqNo, err = p.h.readFrom(r); err != nil {
 		return
 	}
 	if err = readBinary(r, &p.pktSeqHi); err != nil {

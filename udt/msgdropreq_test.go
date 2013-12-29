@@ -7,7 +7,7 @@ import (
 func TestMsgDropReqPacket(t *testing.T) {
 	testPacket(
 		&msgDropReqPacket{
-			controlPacket: controlPacket{
+			h: header{
 				ts:        100,
 				dstSockId: 59,
 			},

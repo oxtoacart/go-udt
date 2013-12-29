@@ -3,23 +3,26 @@ package udt
 // Structure of packets and functions for writing/reading them
 
 import (
-	"bytes"
 	"io"
 )
 
 type ack2Packet struct {
-	controlPacket
+	h        header
 	ackSeqNo uint32 // ACK sequence number
 }
 
+func (p *ack2Packet) sendTime() (ts uint32) {
+	return p.h.ts
+}
+
 func (p *ack2Packet) writeTo(w io.Writer) (err error) {
-	if err := p.writeHeaderTo(w, ack2, p.ackSeqNo); err != nil {
+	if err := p.h.writeTo(w, ack2, p.ackSeqNo); err != nil {
 		return err
 	}
 	return
 }
 
-func (p *ack2Packet) readFrom(b []byte, r *bytes.Reader) (err error) {
-	p.ackSeqNo, err = p.readHeaderFrom(r)
+func (p *ack2Packet) readFrom(r io.Reader) (err error) {
+	p.ackSeqNo, err = p.h.readFrom(r)
 	return
 }

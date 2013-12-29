@@ -2,7 +2,6 @@ package udt
 
 import (
 	"container/heap"
-	"math"
 )
 
 /*
@@ -16,19 +15,6 @@ type packetQueue struct {
 func (q *packetQueue) push(p packet) {
 	heap.Push(&q.h, p)
 	q.l += 1
-}
-
-/*
-nextSendTime returns the ts of the next packet with the lowest ts of
-queued packets, or math.MaxUint32 if no packets are queued.
-*/
-func (q *packetQueue) nextSendTime() (ts uint32) {
-	p := q.peek()
-	if p != nil {
-		return p.sendTime()
-	} else {
-		return math.MaxUint32
-	}
 }
 
 func (q *packetQueue) peek() (p packet) {

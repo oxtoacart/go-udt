@@ -12,12 +12,12 @@ type udtSocketQueue struct {
 	l uint32
 }
 
-func (q *udtSocketQueue) push(p *packetQueue) {
-	heap.Push(&q.h, p)
+func (q *udtSocketQueue) push(s *udtSocket) {
+	heap.Push(&q.h, s)
 	q.l += 1
 }
 
-func (q *udtSocketQueue) peek() (p *packetQueue) {
+func (q *udtSocketQueue) peek() (s *udtSocket) {
 	if q.l == 0 {
 		return nil
 	} else {
@@ -25,12 +25,12 @@ func (q *udtSocketQueue) peek() (p *packetQueue) {
 	}
 }
 
-func (q *udtSocketQueue) pop() (p *packetQueue) {
+func (q *udtSocketQueue) pop() (s *udtSocket) {
 	if q.l == 0 {
 		return nil
 	} else {
 		q.l -= 1
-		return heap.Pop(&q.h).(*packetQueue)
+		return heap.Pop(&q.h).(*udtSocket)
 	}
 }
 
@@ -43,7 +43,7 @@ func newUdtSocketQueue() (q *udtSocketQueue) {
 /*
 A socketHeap is the internal implementation of a Heap used by udtSocketQueue.
 */
-type socketHeap []*packetQueue
+type socketHeap []*udtSocket
 
 func (h socketHeap) Len() int           { return len(h) }
 func (h socketHeap) Less(i, j int) bool { return h[i].nextSendTime() < h[j].nextSendTime() }
@@ -52,7 +52,7 @@ func (h socketHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 func (h *socketHeap) Push(x interface{}) {
 	// Push and Pop use pointer receivers because they modify the slice's length,
 	// not just its contents.
-	*h = append(*h, x.(*packetQueue))
+	*h = append(*h, x.(*udtSocket))
 }
 
 func (h *socketHeap) Pop() interface{} {

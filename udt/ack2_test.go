@@ -4,12 +4,13 @@ import (
 	"testing"
 )
 
-func TestShutdownPacket(t *testing.T) {
+func TestACK2Packet(t *testing.T) {
 	testPacket(
-		&shutdownPacket{
-			controlPacket: controlPacket{
+		&ack2Packet{
+			h: header{
 				ts:        100,
 				dstSockId: 59,
 			},
+			ackSeqNo:    90,
 		}, t)
 }

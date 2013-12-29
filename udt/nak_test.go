@@ -4,13 +4,13 @@ import (
 	"testing"
 )
 
-func TestACK2Packet(t *testing.T) {
+func TestNAKPacket(t *testing.T) {
 	testPacket(
-		&ack2Packet{
-			controlPacket: controlPacket{
+		&nakPacket{
+			h: header{
 				ts:        100,
 				dstSockId: 59,
 			},
-			ackSeqNo:    90,
+			cmpLossInfo: 90,
 		}, t)
 }

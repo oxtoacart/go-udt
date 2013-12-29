@@ -4,13 +4,12 @@ import (
 	"testing"
 )
 
-func TestNAKPacket(t *testing.T) {
+func TestShutdownPacket(t *testing.T) {
 	testPacket(
-		&nakPacket{
-			controlPacket: controlPacket{
+		&shutdownPacket{
+			h: header{
 				ts:        100,
 				dstSockId: 59,
 			},
-			cmpLossInfo: 90,
 		}, t)
 }

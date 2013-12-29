@@ -3,12 +3,13 @@ package udt
 import (
 	"net"
 	"testing"
+	"log"
 )
 
 func TestHandshakePacket(t *testing.T) {
-	testPacket(
+	read := testPacket(
 		&handshakePacket{
-			controlPacket: controlPacket{
+			h: header{
 				ts:        100,
 				dstSockId: 59,
 			},
@@ -20,6 +21,8 @@ func TestHandshakePacket(t *testing.T) {
 			connType:       1,
 			sockId:         59,
 			synCookie:      978,
-			sockAddr:       net.IP{5, 9, 2},
+			sockAddr:       net.ParseIP("127.0.0.1"),
 		}, t)
+		
+	log.Println((read.(*handshakePacket)).sockAddr)
 }

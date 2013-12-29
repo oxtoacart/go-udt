@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"net"
 )
 
 const (
@@ -25,6 +24,8 @@ const (
 	msg_drop_req = 0x7
 
 	// Socket types
+	// Note - these are reversed from the spec, as the C++ implementation of UDT
+	// seems to have them reversed and we want to stay interoperable
 	STREAM = 0
 	DGRAM  = 1 // not supported!
 
@@ -36,6 +37,18 @@ var (
 	endianness = binary.BigEndian
 )
 
+type packet interface {
+	// sendTime retrieves the timesamp of the packet
+	sendTime() (ts uint32)
+
+	writeTo(io.Writer) (err error)
+
+	/*
+		readFrom reads the packet from a Reader
+	*/
+	readFrom(r io.Reader) (err error)
+}
+
 type dataPacket struct {
 	seq       uint32
 	ts        uint32
@@ -43,25 +56,13 @@ type dataPacket struct {
 	data      []byte
 }
 
-type controlPacket struct {
+type header struct {
 	ts        uint32
 	dstSockId uint32
 }
 
 func (p *dataPacket) sendTime() (ts uint32) {
 	return p.ts
-}
-
-func (p *controlPacket) sendTime() (ts uint32) {
-	return p.ts
-}
-
-func (p *dataPacket) dstSocketId() (dstSocketId uint32) {
-	return p.dstSockId
-}
-
-func (p *controlPacket) dstSocketId() (dstSocketId uint32) {
-	return p.dstSockId
 }
 
 func (dp *dataPacket) writeTo(w io.Writer) (err error) {
@@ -80,19 +81,27 @@ func (dp *dataPacket) writeTo(w io.Writer) (err error) {
 	return
 }
 
-func (p *dataPacket) readFrom(b []byte, r *bytes.Reader) (err error) {
+func (p *dataPacket) readFrom(r io.Reader) (err error) {
 	if err = readBinary(r, &p.ts); err != nil {
 		return
 	}
 	if err = readBinary(r, &p.dstSockId); err != nil {
 		return
 	}
-	// The data is whatever is left over after reading
-	p.data = b[len(b)-r.Len():]
+	// The data is whatever is what comes after the 12 bytes of header
+	var buf *bytes.Buffer
+	switch b := r.(type) {
+	case *bytes.Buffer:
+		buf = b
+	default:
+		buf := bytes.NewBuffer([]byte{})
+		buf.ReadFrom(r)
+	}
+	p.data = buf.Bytes()
 	return
 }
 
-func (h *controlPacket) writeHeaderTo(w io.Writer, msgType uint16, info uint32) (err error) {
+func (h *header) writeTo(w io.Writer, msgType uint16, info uint32) (err error) {
 	// Sets the flag bit to indicate this is a control packet
 	if err := writeBinary(w, msgType|flag_bit_16); err != nil {
 		return err
@@ -113,7 +122,7 @@ func (h *controlPacket) writeHeaderTo(w io.Writer, msgType uint16, info uint32) 
 	return
 }
 
-func (p *controlPacket) readHeaderFrom(r io.Reader) (addtlInfo uint32, err error) {
+func (p *header) readFrom(r io.Reader) (addtlInfo uint32, err error) {
 	if err = readBinary(r, &addtlInfo); err != nil {
 		return
 	}
@@ -126,9 +135,7 @@ func (p *controlPacket) readHeaderFrom(r io.Reader) (addtlInfo uint32, err error
 	return
 }
 
-func readPacketFromBytes(b []byte, maxPacketSize uint16) (p packet, err error) {
-	// Wrap the byte slice with a reader so that we can use binary.Read() for the metadata
-	r := bytes.NewReader(b)
+func readPacketFrom(r io.Reader) (p packet, err error) {
 	var h uint32
 	if err = readBinary(r, &h); err != nil {
 		return
@@ -158,26 +165,16 @@ func readPacketFromBytes(b []byte, maxPacketSize uint16) (p packet, err error) {
 			err = fmt.Errorf("Unkown control packet type: %X", msgType)
 			return nil, err
 		}
-		err = p.readFrom(b, r)
+		err = p.readFrom(r)
 		return
 	} else {
 		// this is a data packet
 		p = &dataPacket{
-			seq:  h,
-			data: make([]byte, maxPacketSize),
+			seq: h,
 		}
-		err = p.readFrom(b, r)
+		err = p.readFrom(r)
 	}
 	return
-}
-
-func readPacketFromConn(n net.PacketConn, maxPacketSize uint16) (packet packet, err error) {
-	b := make([]byte, maxPacketSize)
-	if n, _, err := n.ReadFrom(b); err != nil {
-		return nil, err
-	} else {
-		return readPacketFromBytes(b[:n], maxPacketSize)
-	}
 }
 
 func writeBinary(w io.Writer, n interface{}) (err error) {

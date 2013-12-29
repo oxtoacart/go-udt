@@ -7,7 +7,7 @@ import (
 func TestACKPacket(t *testing.T) {
 	testPacket(
 		&ackPacket{
-			controlPacket: controlPacket{
+			h: header{
 				ts:        100,
 				dstSockId: 59,
 			},
