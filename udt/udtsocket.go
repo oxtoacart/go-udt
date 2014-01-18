@@ -3,6 +3,7 @@ package udt
 import (
 	"math"
 	"net"
+	"time"
 )
 
 const (
@@ -12,14 +13,27 @@ const (
 	sock_state_connected        = 3
 )
 
+/*
+udtSocket encapsulates a UDT socket between a local and remote address pair, as
+defined by the UDT specification.  udtSocket implements the net.Conn interface
+so that it can be used anywhere that anywhere a stream-oriented network
+connection (like TCP) would be used.
+*/
 type udtSocket struct {
-	sockState uint8
-	ackPeriod uint32       // in microseconds
-	nakPeriod uint32       // in microseconds
-	expPeriod uint32       // in microseconds
-	sndPeriod uint32       // in microseconds
-	ctrlOut   chan packet  // outbound control packets
-	dataOut   *packetQueue // queue of outbound data packets
+	m            *multiplexer // the multiplexer that handles this socket
+	raddr        *net.UDPAddr // the remote address
+	created      time.Time    // the time that this socket was created
+	sockState    uint8
+	ackPeriod    uint32           // in microseconds
+	nakPeriod    uint32           // in microseconds
+	expPeriod    uint32           // in microseconds
+	sndPeriod    uint32           // in microseconds
+	ctrlIn       chan *dataPacket // inbound control packets
+	dataIn       chan *dataPacket // inbound data packets
+	dataOut      *packetQueue     // queue of outbound data packets
+	pktSeq       uint32           // the current packet sequence number
+	currDp       *dataPacket      // currently reading data packet (for partial reads)
+	currDpOffset int              // offset in currIn (for partial reads)
 
 	// The below fields mirror what's seen on handshakePacket
 	udtVer         uint32
@@ -32,17 +46,71 @@ type udtSocket struct {
 	sockAddr       net.IP
 }
 
+/*******************************************************************************
+ Implementation of net.Conn interface
+*******************************************************************************/
+
 func (s *udtSocket) Read(p []byte) (n int, err error) {
+	if s.currDp == nil {
+		// Grab the next data packet
+		s.currDp = <-s.dataIn
+		s.currDpOffset = 0
+	}
+	n = copy(p, s.currDp.data[s.currDpOffset:])
+	s.currDpOffset += n
+	if s.currDpOffset >= len(s.currDp.data) {
+		// we've exhausted the current data packet, reset to nil
+		s.currDp = nil
+	}
+
 	return
 }
 
+// TODO: implement ReadFrom and WriteTo for performance(?)
+
 func (s *udtSocket) Write(p []byte) (n int, err error) {
+	s.pktSeq += 1
+	dp := &dataPacket{
+		seq:       s.pktSeq,
+		ts:        uint32(time.Now().Sub(s.created) / time.Microsecond),
+		dstSockId: s.sockId,
+		data:      p,
+	}
+	s.dataOut.push(dp)
 	return
 }
 
 func (s *udtSocket) Close() (err error) {
+	// TODO: implement
 	return
 }
+
+func (s *udtSocket) LocalAddr() net.Addr {
+	return s.m.laddr
+}
+
+func (s *udtSocket) RemoteAddr() net.Addr {
+	return s.raddr
+}
+
+func (s *udtSocket) SetDeadline(t time.Time) error {
+	// TODO: implement
+	return nil
+}
+
+func (s *udtSocket) SetReadDeadline(t time.Time) error {
+	// TODO: implement
+	return nil
+}
+
+func (s *udtSocket) SetWriteDeadline(t time.Time) error {
+	// TODO: implement
+	return nil
+}
+
+/*******************************************************************************
+ Private functions
+*******************************************************************************/
 
 /*
 nextSendTime returns the ts of the next data packet with the lowest ts of
@@ -60,8 +128,9 @@ func (s *udtSocket) nextSendTime() (ts uint32) {
 /**
 newUdtSocket creates a new UDT socket based on an initial handshakePacket.
 */
-func newServerSocket(ctrlOut chan packet, p handshakePacket) (s *udtSocket, err error) {
+func newServerSocket(m *multiplexer, p *handshakePacket) (s *udtSocket, err error) {
 	s = &udtSocket{
+		m:              m,
 		sockState:      sock_state_new,
 		udtVer:         p.udtVer,
 		initPktSeq:     p.initPktSeq,
@@ -70,31 +139,34 @@ func newServerSocket(ctrlOut chan packet, p handshakePacket) (s *udtSocket, err 
 		sockType:       p.sockType,
 		sockId:         p.sockId,
 		synCookie:      randUint32(),
-		ctrlOut:        ctrlOut,
 		dataOut:        newPacketQueue(),
 	}
-
-	s.respondInitHandshake()
 
 	return
 }
 
-func newClientSocket(ctrlOut chan packet, peerIp net.IP, sockId uint32) (s *udtSocket, err error) {
+func newClientSocket(m *multiplexer, raddr *net.UDPAddr, sockId uint32) (s *udtSocket, err error) {
 	s = &udtSocket{
+		m:              m,
+		raddr:          raddr,
 		sockState:      sock_state_new,
 		udtVer:         4,
 		initPktSeq:     randUint32(),
 		maxPktSize:     max_packet_size,
 		maxFlowWinSize: 8192, // todo: figure out if/how we should calculate this and/or configure it
-		sockType:       DGRAM,
+		sockType:       STREAM,
 		sockId:         sockId,
-		sockAddr:       peerIp,
-		ctrlOut:        ctrlOut,
-		dataOut:        newPacketQueue(),
+		sockAddr:       raddr.IP,
+		//		ctrlOut:        ctrlOut,
+		dataOut: newPacketQueue(),
 	}
 
 	return
 }
+
+/*******************************************************************************
+ Lifecycle functions
+*******************************************************************************/
 
 func (s *udtSocket) initHandshake() {
 	p := handshakePacket{
@@ -108,7 +180,7 @@ func (s *udtSocket) initHandshake() {
 		sockAddr:       s.sockAddr,
 	}
 	s.sockState = sock_state_handshake_init
-	s.ctrlOut <- &p
+	s.m.ctrlOut <- &p
 }
 
 func (s *udtSocket) respondInitHandshake() {
@@ -120,5 +192,5 @@ func (s *udtSocket) respondInitHandshake() {
 		sockType: 1,
 	}
 	s.sockState = sock_state_handshake_init
-	s.ctrlOut <- &p
+	s.m.ctrlOut <- &p
 }

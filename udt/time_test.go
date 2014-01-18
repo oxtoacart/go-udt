@@ -8,9 +8,9 @@ import (
 
 func TestTime(t *testing.T) {
 	start := time.Now()
-	for time.Now().Sub(start) < 10000 {
-	}
-	//time.Sleep(1000)
+//	for time.Now().Sub(start) < 10000 {
+//	}
+	time.Sleep(10 * time.Microsecond)
 	end := time.Now()
 	log.Printf("\nStart:   %s\nEnd:     %s\nElapsed:", start, end, end.Sub(start))
 	

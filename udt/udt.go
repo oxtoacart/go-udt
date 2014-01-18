@@ -28,7 +28,7 @@ type Conn interface {
 
 type Listener interface {
 	// Accept waits for and returns the next connection to the Listener.
-	Accept() (c *_net.UDPConn, err error)
+	Accept() (c io.ReadWriteCloser, err error)
 
 	// Close closes the Listener.
 	// Any blocked Accept operations will be unblocked and return errors.
@@ -45,16 +45,16 @@ raddr.  See function net.DialUDP for a description of net, laddr and raddr.
 func DialUDT(net string, laddr, raddr *_net.UDPAddr) (conn Conn, err error) {
 	var m *multiplexer
 
-	dial := func() (*_net.UDPConn, error) {
+	dial := func() (io.ReadWriter, error) {
 		return _net.DialUDP(net, laddr, raddr)
 	}
 
-	if m, err = multiplexerFor(net, laddr, dial); err == nil {
+	if m, err = multiplexerFor(laddr, dial); err == nil {
 		if m.mode == mode_server {
 			err = fmt.Errorf("Attempted to dial out from a server socket")
 		} else {
 			m.mode = mode_client
-			conn, err = m.newClientSocket()
+			conn, err = m.newClientSocket(raddr)
 		}
 	}
 
@@ -68,11 +68,11 @@ laddr. See function net.ListenUDP for a description of net and laddr.
 func ListenUDT(net string, laddr *_net.UDPAddr) (l Listener, err error) {
 	var m *multiplexer
 
-	listen := func() (*_net.UDPConn, error) {
+	listen := func() (io.ReadWriter, error) {
 		return _net.ListenUDP(net, laddr)
 	}
 
-	if m, err = multiplexerFor(net, laddr, listen); err == nil {
+	if m, err = multiplexerFor(laddr, listen); err == nil {
 		if m.mode == mode_client {
 			err = fmt.Errorf("Attempted to listen on a client socket")
 		} else {

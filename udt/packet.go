@@ -26,8 +26,8 @@ const (
 	// Socket types
 	// Note - these are reversed from the spec, as the C++ implementation of UDT
 	// seems to have them reversed and we want to stay interoperable
-	STREAM = 0
-	DGRAM  = 1 // not supported!
+	STREAM = 1
+	DGRAM  = 0 // not supported!
 
 	// No info for info section of header
 	noinfo = 0

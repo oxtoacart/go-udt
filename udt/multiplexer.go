@@ -1,11 +1,12 @@
 package udt
 
 import (
+	"bytes"
 	"github.com/oxtoacart/bpool"
+	"io"
 	"log"
 	"net"
 	"sync"
-	"bytes"
 	"time"
 )
 
@@ -13,7 +14,8 @@ import (
 A multiplexer multiplexes multiple UDT sockets over a single PacketConn.
 */
 type multiplexer struct {
-	conn            *net.UDPConn          // the PacketConn from which we read/write
+	laddr           *net.UDPAddr          // the local address handled by this multiplexer
+	conn            io.ReadWriter         // the PacketConn from which we read/write
 	mode            uint8                 // client or server
 	sockets         map[uint32]*udtSocket // the server udtSockets handled by this multiplexer, by sockId
 	socketsMutex    *sync.Mutex
@@ -25,42 +27,30 @@ type multiplexer struct {
 	readBytePool    *bpool.BytePool   // leaky byte pool for reading from conn
 }
 
-func (m *multiplexer) Accept() (c *net.UDPConn, err error) {
-	return
-}
-
-func (m *multiplexer) Close() (err error) {
-	return
-}
-
-func (m *multiplexer) Addr() (addr net.Addr) {
-	return
-}
-
 /*
-multiplexerFor gets or creates a multiplexer for the given address.  If a new
-multiplexer is created, the given init function is run to obtain a net.UDPConn.
+multiplexerFor gets or creates a multiplexer for the given local address.  If a
+new multiplexer is created, the given init function is run to obtain an
+io.ReadWriter.
 */
-func multiplexerFor(_net string, laddr *net.UDPAddr, init func() (*net.UDPConn, error)) (m *multiplexer, err error) {
+func multiplexerFor(laddr *net.UDPAddr, init func() (io.ReadWriter, error)) (m *multiplexer, err error) {
 	multiplexersMutex.Lock()
 	defer multiplexersMutex.Unlock()
-	if laddr != nil {
-		// Explicit local address given, check if we have a multiplexer for it
-		m = multiplexers[laddr.String()]
-	}
+	key := laddr.String()
+	m = multiplexers[key]
 	if m == nil {
 		// No multiplexer, need to create connection
-		var conn *net.UDPConn
+		var conn io.ReadWriter
 		if conn, err = init(); err == nil {
-			m = newMultiplexer(conn)
-			multiplexers[conn.LocalAddr().String()] = m
+			m = newMultiplexer(laddr, conn)
+			multiplexers[key] = m
 		}
 	}
 	return
 }
 
-func newMultiplexer(conn *net.UDPConn) (m *multiplexer) {
+func newMultiplexer(laddr *net.UDPAddr, conn io.ReadWriter) (m *multiplexer) {
 	m = &multiplexer{
+		laddr:           laddr,
 		conn:            conn,
 		sockets:         make(map[uint32]*udtSocket),
 		socketsMutex:    new(sync.Mutex),
@@ -79,17 +69,13 @@ func newMultiplexer(conn *net.UDPConn) (m *multiplexer) {
 	return
 }
 
-func (m *multiplexer) newClientSocket() (s *udtSocket, err error) {
+func (m *multiplexer) newClientSocket(raddr *net.UDPAddr) (s *udtSocket, err error) {
 	m.socketsMutex.Lock()
 	defer m.socketsMutex.Unlock()
 	sids -= 1
 	sid := sids
-	if host, _, err := net.SplitHostPort(m.conn.RemoteAddr().String()); err != nil {
-		err = err
-	} else {
-		if s, err = newClientSocket(m.ctrlOut, net.ParseIP(host), sid); err == nil {
-			m.sockets[sid] = s
-		}
+	if s, err = newClientSocket(m, raddr, sid); err == nil {
+		m.sockets[sid] = s
 	}
 
 	for {
@@ -133,7 +119,7 @@ func (m *multiplexer) write() {
 			defer m.writeBufferPool.Put(b)
 			if err := p.writeTo(b); err != nil {
 				// TODO: handle write error
-				log.Fatalf("Unable to write out: %s", err)
+				log.Fatalf("Unable to buffer out: %s", err)
 			} else {
 				if _, err := b.WriteTo(m.conn); err != nil {
 					// TODO: handle write error
@@ -156,16 +142,20 @@ func (m *multiplexer) coordinate() {
 
 func (m *multiplexer) handleInbound(_p interface{}) {
 	switch p := _p.(type) {
-	case handshakePacket:
+	case *handshakePacket:
 		// Only process packet if version and type are supported
+		log.Println("Got handshake packet")
 		if p.udtVer == 4 && p.sockType == STREAM {
+			log.Println("Right version and type")
 			s := m.sockets[p.sockId]
 			if p.sockType == init_client_handshake {
 				if s == nil {
 					// create a new udt socket and remember it
 					var err error
-					if s, err = newServerSocket(m.ctrlOut, p); err == nil {
+					if s, err = newServerSocket(m, p); err == nil {
 						m.sockets[p.sockId] = s
+						log.Println("Responding to handshake")
+						s.respondInitHandshake()
 					}
 				}
 			}
