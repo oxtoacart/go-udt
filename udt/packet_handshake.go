@@ -20,6 +20,10 @@ type handshakePacket struct {
 	sockAddr       net.IP // the IP address of the UDP socket to which this packet is being sent
 }
 
+func (p *handshakePacket) socketId() (sockId uint32) {
+	return p.sockId
+}
+
 func (p *handshakePacket) sendTime() (ts uint32) {
 	return p.h.ts
 }

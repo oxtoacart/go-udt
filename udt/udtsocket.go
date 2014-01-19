@@ -1,6 +1,7 @@
 package udt
 
 import (
+	"io"
 	"math"
 	"net"
 	"time"
@@ -22,6 +23,7 @@ connection (like TCP) would be used.
 type udtSocket struct {
 	m            *multiplexer // the multiplexer that handles this socket
 	raddr        *net.UDPAddr // the remote address
+	boundWriter  io.Writer    // a UDP writer that knows which address to send to
 	created      time.Time    // the time that this socket was created
 	sockState    uint8
 	ackPeriod    uint32           // in microseconds
@@ -128,9 +130,11 @@ func (s *udtSocket) nextSendTime() (ts uint32) {
 /**
 newUdtSocket creates a new UDT socket based on an initial handshakePacket.
 */
-func newServerSocket(m *multiplexer, p *handshakePacket) (s *udtSocket, err error) {
+func newServerSocket(m *multiplexer, raddr *net.UDPAddr, p *handshakePacket) (s *udtSocket, err error) {
 	s = &udtSocket{
 		m:              m,
+		raddr:          raddr,
+		boundWriter:    &boundUDPWriter{m.conn, raddr},
 		sockState:      sock_state_new,
 		udtVer:         p.udtVer,
 		initPktSeq:     p.initPktSeq,
@@ -138,6 +142,7 @@ func newServerSocket(m *multiplexer, p *handshakePacket) (s *udtSocket, err erro
 		maxFlowWinSize: p.maxFlowWinSize,
 		sockType:       p.sockType,
 		sockId:         p.sockId,
+		sockAddr:       raddr.IP,
 		synCookie:      randUint32(),
 		dataOut:        newPacketQueue(),
 	}
@@ -145,10 +150,12 @@ func newServerSocket(m *multiplexer, p *handshakePacket) (s *udtSocket, err erro
 	return
 }
 
-func newClientSocket(m *multiplexer, raddr *net.UDPAddr, sockId uint32) (s *udtSocket, err error) {
+func newClientSocket(m *multiplexer, sockId uint32) (s *udtSocket, err error) {
+	raddr := (m.conn.RemoteAddr()).(*net.UDPAddr)
 	s = &udtSocket{
 		m:              m,
 		raddr:          raddr,
+		boundWriter:    m.conn,
 		sockState:      sock_state_new,
 		udtVer:         4,
 		initPktSeq:     randUint32(),
@@ -157,8 +164,7 @@ func newClientSocket(m *multiplexer, raddr *net.UDPAddr, sockId uint32) (s *udtS
 		sockType:       STREAM,
 		sockId:         sockId,
 		sockAddr:       raddr.IP,
-		//		ctrlOut:        ctrlOut,
-		dataOut: newPacketQueue(),
+		dataOut:        newPacketQueue(),
 	}
 
 	return
@@ -190,6 +196,7 @@ func (s *udtSocket) respondInitHandshake() {
 		},
 		udtVer:   s.udtVer,
 		sockType: 1,
+		sockId:   s.sockId,
 	}
 	s.sockState = sock_state_handshake_init
 	s.m.ctrlOut <- &p

@@ -13,6 +13,10 @@ type msgDropReqPacket struct {
 	lastSeq  uint32 // Last sequence number in the message
 }
 
+func (p *msgDropReqPacket) socketId() (sockId uint32) {
+	return p.h.dstSockId
+}
+
 func (p *msgDropReqPacket) sendTime() (ts uint32) {
 	return p.h.ts
 }

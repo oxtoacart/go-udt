@@ -11,6 +11,10 @@ type nakPacket struct {
 	cmpLossInfo uint32 // integer array of compressed loss information
 }
 
+func (p *nakPacket) socketId() (sockId uint32) {
+	return p.h.dstSockId
+}
+
 func (p *nakPacket) sendTime() (ts uint32) {
 	return p.h.ts
 }

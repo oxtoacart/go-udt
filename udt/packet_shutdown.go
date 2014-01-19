@@ -6,6 +6,10 @@ import (
 	"io"
 )
 
+func (p *shutdownPacket) socketId() (sockId uint32) {
+	return p.h.dstSockId
+}
+
 type shutdownPacket struct {
 	h header
 }

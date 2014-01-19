@@ -38,6 +38,9 @@ var (
 )
 
 type packet interface {
+	// socketId retrieves the socket id of a packet
+	socketId() (sockId uint32)
+
 	// sendTime retrieves the timesamp of the packet
 	sendTime() (ts uint32)
 
@@ -59,6 +62,10 @@ type dataPacket struct {
 type header struct {
 	ts        uint32
 	dstSockId uint32
+}
+
+func (p *dataPacket) socketId() (sockId uint32) {
+	return p.dstSockId
 }
 
 func (p *dataPacket) sendTime() (ts uint32) {

@@ -10,6 +10,10 @@ type keepAlivePacket struct {
 	h header
 }
 
+func (p *keepAlivePacket) socketId() (sockId uint32) {
+	return p.h.dstSockId
+}
+
 func (p *keepAlivePacket) sendTime() (ts uint32) {
 	return p.h.ts
 }

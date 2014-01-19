@@ -3,7 +3,6 @@ package udt
 import (
 	"bytes"
 	"github.com/oxtoacart/bpool"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -15,16 +14,21 @@ A multiplexer multiplexes multiple UDT sockets over a single PacketConn.
 */
 type multiplexer struct {
 	laddr           *net.UDPAddr          // the local address handled by this multiplexer
-	conn            io.ReadWriter         // the PacketConn from which we read/write
+	conn            *net.UDPConn          // the UDPConn from which we read/write
 	mode            uint8                 // client or server
 	sockets         map[uint32]*udtSocket // the server udtSockets handled by this multiplexer, by sockId
 	socketsMutex    *sync.Mutex
 	sendQ           *udtSocketQueue   // priority queue of udtSockets awaiting a send (actually includes ones with no packets waiting too)
 	ctrlOut         chan packet       // control packets meant queued for sending
-	in              chan packet       // packets inbound from the PacketConn
+	in              chan packetHolder // packets inbound from the PacketConn
 	out             chan packet       // packets outbound to the PacketConn
 	writeBufferPool *bpool.BufferPool // leaky buffer pool for writing to conn
 	readBytePool    *bpool.BytePool   // leaky byte pool for reading from conn
+}
+
+type packetHolder struct {
+	packet packet
+	from   *net.UDPAddr
 }
 
 /*
@@ -32,14 +36,14 @@ multiplexerFor gets or creates a multiplexer for the given local address.  If a
 new multiplexer is created, the given init function is run to obtain an
 io.ReadWriter.
 */
-func multiplexerFor(laddr *net.UDPAddr, init func() (io.ReadWriter, error)) (m *multiplexer, err error) {
+func multiplexerFor(laddr *net.UDPAddr, init func() (*net.UDPConn, error)) (m *multiplexer, err error) {
 	multiplexersMutex.Lock()
 	defer multiplexersMutex.Unlock()
 	key := laddr.String()
 	m = multiplexers[key]
 	if m == nil {
 		// No multiplexer, need to create connection
-		var conn io.ReadWriter
+		var conn *net.UDPConn
 		if conn, err = init(); err == nil {
 			m = newMultiplexer(laddr, conn)
 			multiplexers[key] = m
@@ -48,7 +52,7 @@ func multiplexerFor(laddr *net.UDPAddr, init func() (io.ReadWriter, error)) (m *
 	return
 }
 
-func newMultiplexer(laddr *net.UDPAddr, conn io.ReadWriter) (m *multiplexer) {
+func newMultiplexer(laddr *net.UDPAddr, conn *net.UDPConn) (m *multiplexer) {
 	m = &multiplexer{
 		laddr:           laddr,
 		conn:            conn,
@@ -56,7 +60,7 @@ func newMultiplexer(laddr *net.UDPAddr, conn io.ReadWriter) (m *multiplexer) {
 		socketsMutex:    new(sync.Mutex),
 		sendQ:           newUdtSocketQueue(),
 		ctrlOut:         make(chan packet, 100),                    // todo: figure out how to size this
-		in:              make(chan packet, 100),                    // todo: make this tunable
+		in:              make(chan packetHolder, 100),              // todo: make this tunable
 		out:             make(chan packet, 100),                    // todo: make this tunable
 		writeBufferPool: bpool.NewBufferPool(25600),                // todo: make this tunable
 		readBytePool:    bpool.NewBytePool(25600, max_packet_size), // todo: make this tunable
@@ -69,12 +73,12 @@ func newMultiplexer(laddr *net.UDPAddr, conn io.ReadWriter) (m *multiplexer) {
 	return
 }
 
-func (m *multiplexer) newClientSocket(raddr *net.UDPAddr) (s *udtSocket, err error) {
+func (m *multiplexer) newClientSocket() (s *udtSocket, err error) {
 	m.socketsMutex.Lock()
 	defer m.socketsMutex.Unlock()
 	sids -= 1
 	sid := sids
-	if s, err = newClientSocket(m, raddr, sid); err == nil {
+	if s, err = newClientSocket(m, sid); err == nil {
 		m.sockets[sid] = s
 	}
 
@@ -94,14 +98,14 @@ func (m *multiplexer) read() {
 	for {
 		b := m.readBytePool.Get()
 		defer m.readBytePool.Put(b)
-		if _, err := m.conn.Read(b); err != nil {
+		if _, from, err := m.conn.ReadFromUDP(b); err != nil {
 			log.Printf("Unable to read into buffer: %s", err)
 		} else {
 			r := bytes.NewReader(b)
 			if p, err := readPacketFrom(r); err != nil {
 				log.Printf("Unable to read packet: %s", err)
 			} else {
-				m.in <- p
+				m.in <- packetHolder{p, from}
 			}
 		}
 	}
@@ -121,7 +125,8 @@ func (m *multiplexer) write() {
 				// TODO: handle write error
 				log.Fatalf("Unable to buffer out: %s", err)
 			} else {
-				if _, err := b.WriteTo(m.conn); err != nil {
+				log.Printf("Writing to %s", p.socketId())
+				if _, err := b.WriteTo(m.sockets[p.socketId()].boundWriter); err != nil {
 					// TODO: handle write error
 					log.Fatalf("Unable to write out: %s", err)
 				}
@@ -140,8 +145,8 @@ func (m *multiplexer) coordinate() {
 	}
 }
 
-func (m *multiplexer) handleInbound(_p interface{}) {
-	switch p := _p.(type) {
+func (m *multiplexer) handleInbound(ph packetHolder) {
+	switch p := ph.packet.(type) {
 	case *handshakePacket:
 		// Only process packet if version and type are supported
 		log.Println("Got handshake packet")
@@ -152,7 +157,7 @@ func (m *multiplexer) handleInbound(_p interface{}) {
 				if s == nil {
 					// create a new udt socket and remember it
 					var err error
-					if s, err = newServerSocket(m, p); err == nil {
+					if s, err = newServerSocket(m, ph.from, p); err == nil {
 						m.sockets[p.sockId] = s
 						log.Println("Responding to handshake")
 						s.respondInitHandshake()

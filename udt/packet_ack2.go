@@ -11,6 +11,10 @@ type ack2Packet struct {
 	ackSeqNo uint32 // ACK sequence number
 }
 
+func (p *ack2Packet) socketId() (sockId uint32) {
+	return p.h.dstSockId
+}
+
 func (p *ack2Packet) sendTime() (ts uint32) {
 	return p.h.ts
 }

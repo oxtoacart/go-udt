@@ -19,6 +19,10 @@ type ackPacket struct {
 	estLinkCap  uint32 // Estimated link capacity (in number of packets per second)
 }
 
+func (p *ackPacket) socketId() (sockId uint32) {
+	return p.h.dstSockId
+}
+
 func (p *ackPacket) sendTime() (ts uint32) {
 	return p.h.ts
 }
