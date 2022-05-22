@@ -20,6 +20,6 @@ func (m *multiplexer) Close() (err error) {
 }
 
 func (m *multiplexer) Addr() (addr net.Addr) {
-	return
+	return m.laddr
 }
 
