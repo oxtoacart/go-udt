@@ -78,7 +78,7 @@ func ListenUDT(net string, laddr string) (l Listener, err error) {
 		return nil, err
 	}
 	listen := func() (*_net.UDPConn, error) {
-		return _net.ListenUDP(net, laddr)
+		return _net.ListenUDP(net, addr)
 	}
 
 	if m, err = multiplexerFor(addr, listen); err == nil {
