@@ -43,7 +43,7 @@ raddr.  See function net.DialUDP for a description of net, laddr and raddr.
 */
 func DialUDT(net string, laddr, raddress string) (conn Conn, err error) {
 	var m *multiplexer
-	raddr, err = net.ResolveUDPAddr(net, raddress)
+	raddr, err = _net.ResolveUDPAddr(net, raddress)
 	if err == nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ laddr. See function net.ListenUDP for a description of net and laddr.
 */
 func ListenUDT(net string, laddr string) (l Listener, err error) {
 	var m *multiplexer
-	addr, err = net.ResolveUDPAddr(net, laddr)
+	addr, err = _net.ResolveUDPAddr(net, laddr)
 	if err == nil {
 		return nil, err
 	}
