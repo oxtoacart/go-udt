@@ -58,9 +58,11 @@ func DialUDT(net string, laddress, raddress string) (conn Conn, err error) {
 	if m, err = multiplexerFor(laddr, dial); err == nil {
 		if m.mode == mode_server {
 			err = fmt.Errorf("Attempted to dial out from a server socket")
+			return nil, err
 		} else {
 			m.mode = mode_client
 			conn, err = m.newClientSocket()
+			return conn, nil
 		}
 	}
 
@@ -84,9 +86,10 @@ func ListenUDT(net string, laddr string) (l Listener, err error) {
 	if m, err = multiplexerFor(addr, listen); err == nil {
 		if m.mode == mode_client {
 			err = fmt.Errorf("Attempted to listen on a client socket")
+			return nil, err
 		} else {
 			m.mode = mode_server
-			l = m
+			return m, nil
 		}
 	}
 
