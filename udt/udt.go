@@ -28,7 +28,7 @@ type Conn interface {
 
 type Listener interface {
 	// Accept waits for and returns the next connection to the Listener.
-	Accept() (c io.ReadWriteCloser, err error)
+	Accept() (c _net.Conn, err error)
 
 	// Close closes the Listener.
 	// Any blocked Accept operations will be unblocked and return errors.
