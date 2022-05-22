@@ -14,7 +14,6 @@ package udt
 import (
 	"crypto/rand"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"math/big"
