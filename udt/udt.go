@@ -25,18 +25,6 @@ type Conn interface {
 	_net.Conn
 }
 
-type Listener interface {
-	// Accept waits for and returns the next connection to the Listener.
-	Accept() (c _net.Conn, err error)
-
-	// Close closes the Listener.
-	// Any blocked Accept operations will be unblocked and return errors.
-	Close() (err error)
-
-	// Addr returns the Listener's network address.
-	Addr() (addr _net.Addr)
-}
-
 /*
 DialUDT establishes an outbound UDT connection using the supplied net, laddr and
 raddr.  See function net.DialUDP for a description of net, laddr and raddr.
