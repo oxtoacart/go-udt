@@ -12,7 +12,7 @@ type listener struct {
 	conn *net.UDPConn
 }
 
-func (m *multiplexer) Accept() (c io.ReadWriteCloser, err error) {
+func (m *multiplexer) Accept() (c net.Conn, err error) {
 	return
 }
 
