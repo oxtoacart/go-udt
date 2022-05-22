@@ -41,9 +41,13 @@ type Listener interface {
 DialUDT establishes an outbound UDT connection using the supplied net, laddr and
 raddr.  See function net.DialUDP for a description of net, laddr and raddr.
 */
-func DialUDT(net string, laddr, raddress string) (conn Conn, err error) {
+func DialUDT(net string, laddress, raddress string) (conn Conn, err error) {
 	var m *multiplexer
 	raddr, err := _net.ResolveUDPAddr(net, raddress)
+	if err == nil {
+		return nil, err
+	}
+	laddr, err := _net.ResolveUDPAddr(net, laddress)
 	if err == nil {
 		return nil, err
 	}
@@ -77,7 +81,7 @@ func ListenUDT(net string, laddr string) (l Listener, err error) {
 		return _net.ListenUDP(net, laddr)
 	}
 
-	if m, err = multiplexerFor(laddr, listen); err == nil {
+	if m, err = multiplexerFor(addr, listen); err == nil {
 		if m.mode == mode_client {
 			err = fmt.Errorf("Attempted to listen on a client socket")
 		} else {
