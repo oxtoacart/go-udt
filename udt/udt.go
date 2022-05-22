@@ -23,7 +23,7 @@ import (
 )
 
 type Conn interface {
-	io.ReadWriteCloser
+	_net.Conn
 }
 
 type Listener interface {
