@@ -12,7 +12,7 @@ type listener struct {
 }
 
 func (m *multiplexer) Accept() (c net.Conn, err error) {
-	return m.conn
+	return m.conn, nil
 }
 
 func (m *multiplexer) Close() (err error) {
